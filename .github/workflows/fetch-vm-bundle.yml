@@ -1,0 +1,49 @@
+name: fetch-claude-vm-bundle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download bundle files
+        run: |
+          set -uo pipefail
+          BASE="https://downloads.claude.ai/vms/linux/x64/072b6cbfe74f428a98bd86035f83b322b369d1f1"
+          mkdir -p out
+          for f in rootfs.vhdx vmlinuz initrd; do
+            echo "===== $f ====="
+            if curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 -o "out/${f}.zst" "$BASE/${f}.zst"; then
+              echo "OK $f"
+            else
+              echo "FAILED $f"; rm -f "out/${f}.zst"
+            fi
+            [ -f "out/${f}.zst" ] && ls -l "out/${f}.zst" && sha256sum "out/${f}.zst"
+          done
+          ls -l out || true
+
+      - name: Verify rootfs checksum
+        run: |
+          set -uo pipefail
+          EXPECT="c480f8a62d0d9be20e1a1ee31b9f25c73097f793127dcefa90b0c59ada0e12ad"
+          ACTUAL=$(sha256sum out/rootfs.vhdx.zst | awk '{print $1}')
+          echo "expected: $EXPECT"
+          echo "actual  : $ACTUAL"
+          [ "$ACTUAL" = "$EXPECT" ] || { echo "::error::checksum mismatch"; exit 1; }
+
+      - name: Publish to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          TAG="vm-bundle-${GITHUB_RUN_ID}"
+          gh release create "$TAG" --title "Claude VM bundle ${GITHUB_RUN_ID}" \
+            --notes "rootfs for bundle 072b6cbfe74f428a98bd86035f83b322b369d1f1" out/rootfs.vhdx.zst
+          for f in out/vmlinuz.zst out/initrd.zst; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f"
+          done
