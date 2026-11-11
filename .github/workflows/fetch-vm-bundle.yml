@@ -42,8 +42,8 @@ jobs:
         run: |
           set -uo pipefail
           TAG="vm-bundle-${GITHUB_RUN_ID}"
-          gh release create "$TAG" --title "Claude VM bundle ${GITHUB_RUN_ID}" \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Claude VM bundle ${GITHUB_RUN_ID}" \
             --notes "rootfs for bundle 072b6cbfe74f428a98bd86035f83b322b369d1f1" out/rootfs.vhdx.zst
           for f in out/vmlinuz.zst out/initrd.zst; do
-            [ -f "$f" ] && gh release upload "$TAG" "$f"
+            [ -f "$f" ] && gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "$f"
           done
